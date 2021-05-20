@@ -124,15 +124,6 @@ int main() {
         std::vector<cv::Point2f> features_prev, features_next;
         std::vector<uchar> status;
         std::vector<float> err;
-        for (;;) {
-            if (!cap.read(frame))
-                break;
-            ret = frame.clone();
-            cv::calcOpticalFlowPyrLK(old_frame, frame, features_prev, features_next, status, err);
-            old_frame = frame.clone();
-            features_prev.swap(features_next);
-            features_prev.clear();
-        }
     }
     return 0;
 }
