@@ -1,13 +1,10 @@
-#include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/utils/filesystem.hpp>
-#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/types.hpp>
 #include "opencv2/calib3d.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/features2d.hpp"
-#include "opencv2/xfeatures2d.hpp"
 #include <opencv2/videoio.hpp>
 
 
@@ -62,25 +59,39 @@ inline cv::Mat findKeyPointsHomography(std::vector<cv::KeyPoint>& kpts1, std::ve
     return H;
 }
 
+void Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scalar color)
+{
+
+    //-- Draw lines between the corners (the mapped object in the scene - image_2 )
+    line(res, obj_corners[0],obj_corners[1], color, 4);
+    line(res, obj_corners[1],obj_corners[2], color, 4);
+    line(res, obj_corners[2],obj_corners[3], color, 4);
+    line(res, obj_corners[3],obj_corners[0], color, 4);
+    cv::imshow("result", res);
+    cv::waitKey(0);
+}
 
 
 int main() {
     cv::VideoCapture cap("../video.mov");
     std::vector<cv::Mat> images;
+    std::vector<cv::Point2f> corners(16), corners_next(16);
     cv::Mat image;
     std::vector<cv::String> filenames;
-    std::vector<cv::Scalar> colors;
     cv::utils::fs::glob(cv::String("../objects"),cv::String("*.png"),filenames);
+    std::vector<cv::Point2f> obj_corners(4), obj_corners_next(4);
+    std::vector<cv::Point2f>point1(4),point2(4);
+    std::vector<cv::Scalar> colors;
+    colors = DefColors();
     for (const auto& fn: filenames) {
         image = cv::imread(fn);
         images.push_back(image);
     }
-    colors = DefColors();
     if(cap.isOpened()) // check if we succeeded
     {
         cv::Mat frame,ret, old_frame;
         cap.read(old_frame);
-        ret = old_frame.clone();
+        int objectC = 0;
         for (int j = 0; j < images.size(); j++)
         {
             std::vector<cv::KeyPoint> kpts1;
@@ -109,21 +120,46 @@ int main() {
             obj_corners[3] = cv::Point2f(0, (float) images[j].rows);
             std::vector<cv::Point2f> scene_corners(4);
             perspectiveTransform(obj_corners, scene_corners, H);
-            //-- Draw lines between the corners (the mapped object in the scene - image_2 )
-            line(res, scene_corners[0] + cv::Point2f((float) images[j].cols, 0),
-                 scene_corners[1] + cv::Point2f((float) images[j].cols, 0), colors[j], 4);
-            line(res, scene_corners[1] + cv::Point2f((float) images[j].cols, 0),
-                 scene_corners[2] + cv::Point2f((float) images[j].cols, 0), colors[j], 4);
-            line(res, scene_corners[2] + cv::Point2f((float) images[j].cols, 0),
-                 scene_corners[3] + cv::Point2f((float) images[j].cols, 0), colors[j], 4);
-            line(res, scene_corners[3] + cv::Point2f((float) images[j].cols, 0),
-                 scene_corners[0] + cv::Point2f((float) images[j].cols, 0), colors[j], 4);
-            cv::imshow("result", res);
-            cv::waitKey(0);
+            obj_corners[0]=scene_corners[0] + cv::Point2f((float) images[j].cols, 0);
+            obj_corners[1]=scene_corners[1] + cv::Point2f((float) images[j].cols, 0);
+            obj_corners[2]=scene_corners[2] + cv::Point2f((float) images[j].cols, 0);
+            obj_corners[3]=scene_corners[3] + cv::Point2f((float) images[j].cols, 0);
+            Draw_rectangle(res,obj_corners,colors[j]);
+
+            for(int k=0; k<obj_corners.size();k++)
+            {
+                corners[objectC] = obj_corners[k];
+                objectC++;
+            }
+       }
+        cv::destroyWindow("result");
+
+        cv:: Mat gray,prevGray;
+        cv::Size subPixWinSize(10,10), winSize(31,31);
+        cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
+        for(;;) {
+            cap >> frame;
+            if (frame.empty())
+                break;
+
+            frame.copyTo(image);
+            cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+
+            std::vector<uchar> status;
+            std::vector<float> err;
+            if(prevGray.empty())
+                gray.copyTo(prevGray);
+            calcOpticalFlowPyrLK(prevGray, gray, corners, corners_next, status, err, winSize,
+                                     3, termcrit, 0, 0.001);
+            
+
+            cv::imshow("LK Demo", image);
+            cv::waitKey(1);
+            std::swap(corners, corners_next);
+            cv::swap(prevGray, gray);
+
         }
-        std::vector<cv::Point2f> features_prev, features_next;
-        std::vector<uchar> status;
-        std::vector<float> err;
+
     }
     return 0;
 }
