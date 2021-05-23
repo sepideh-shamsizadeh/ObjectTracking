@@ -59,7 +59,7 @@ inline cv::Mat findKeyPointsHomography(std::vector<cv::KeyPoint>& kpts1, std::ve
     return H;
 }
 
-void Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scalar color)
+cv::Mat Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scalar color)
 {
 
     //-- Draw lines between the corners (the mapped object in the scene - image_2 )
@@ -67,10 +67,33 @@ void Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scalar 
     line(res, obj_corners[1],obj_corners[2], color, 4);
     line(res, obj_corners[2],obj_corners[3], color, 4);
     line(res, obj_corners[3],obj_corners[0], color, 4);
-    cv::imshow("result", res);
-    cv::waitKey(0);
+    return res;
+
 }
 
+cv::Mat Draw_rectangle_by_center(std::vector<cv::Point2f> corners, cv::Mat image, std::vector<cv::Scalar> colors,
+                                 std::vector<float> height, std::vector<float> width)
+{
+    std::vector<cv::Point2f> obj_corners(4);
+    cv::Point2f center,second_point;
+    int objectC = 0;
+    for(int i=0;i<4;i++)
+    {
+        center = corners[objectC];
+        objectC++;
+        second_point = corners[objectC];
+        objectC++;
+        float x,y;
+        x = center.x -second_point.x;
+        y = second_point.y - center.y;
+        obj_corners[0] = cv::Point2f(center.x-2*x,center.y+2*y);
+        obj_corners[2] = cv::Point2f(center.x+2*x,center.y-2*y);
+        obj_corners[1] = cv::Point2f(obj_corners[2].x-width[i],obj_corners[0].y-height[i]);
+        obj_corners[3] = cv::Point2f(obj_corners[0].x+width[i],obj_corners[2].y+height[i]);
+        image = Draw_rectangle(image,obj_corners,colors[i]);
+    }
+    return image;
+}
 
 int main() {
     cv::VideoCapture cap("../video.mov");
@@ -82,6 +105,7 @@ int main() {
     std::vector<cv::Point2f> obj_corners(4), obj_corners_next(4);
     std::vector<cv::Point2f>point1(4),point2(4);
     std::vector<cv::Scalar> colors;
+    std::vector<float> height(4), width(4);
     colors = DefColors();
     for (const auto& fn: filenames) {
         image = cv::imread(fn);
@@ -89,8 +113,8 @@ int main() {
     }
     if(cap.isOpened()) // check if we succeeded
     {
-        cv::Mat frame,ret, old_frame;
-        cap.read(old_frame);
+        cv::Mat ret, frame;
+        cap.read(frame);
         int objectC = 0;
         for (int j = 0; j < images.size(); j++)
         {
@@ -103,7 +127,7 @@ int main() {
             std::vector<cv::DMatch> matches;
 
             detect_and_compute(images[j], kpts1, desc1);
-            detect_and_compute(old_frame, kpts2, desc2);
+            detect_and_compute(frame, kpts2, desc2);
 
             match( desc1, desc2, matches);
 
@@ -111,53 +135,59 @@ int main() {
             cv::Mat H = findKeyPointsHomography(kpts1, kpts2, matches, match_mask);
 
             cv::Mat res;
-            cv::drawMatches(images[j], kpts1, old_frame, kpts2, matches, res, cv::Scalar::all(-1),
+            cv::drawMatches(images[j], kpts1, frame, kpts2, matches, res, cv::Scalar::all(-1),
                             cv::Scalar::all(-1), match_mask, cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
             std::vector<cv::Point2f> obj_corners(4);
             obj_corners[0] = cv::Point2f(0, 0);
             obj_corners[1] = cv::Point2f((float) images[j].cols, 0);
             obj_corners[2] = cv::Point2f((float) images[j].cols, (float) images[j].rows);
             obj_corners[3] = cv::Point2f(0, (float) images[j].rows);
+
             std::vector<cv::Point2f> scene_corners(4);
             perspectiveTransform(obj_corners, scene_corners, H);
             obj_corners[0]=scene_corners[0] + cv::Point2f((float) images[j].cols, 0);
             obj_corners[1]=scene_corners[1] + cv::Point2f((float) images[j].cols, 0);
             obj_corners[2]=scene_corners[2] + cv::Point2f((float) images[j].cols, 0);
             obj_corners[3]=scene_corners[3] + cv::Point2f((float) images[j].cols, 0);
-            Draw_rectangle(res,obj_corners,colors[j]);
-
-            for(int k=0; k<obj_corners.size();k++)
-            {
-                corners[objectC] = obj_corners[k];
-                objectC++;
-            }
+            res = Draw_rectangle(res,obj_corners,colors[j]);
+            cv::Point2f center, second_point;
+            height[j] = scene_corners[0].y-scene_corners[1].y;
+            width[j] = scene_corners[2].x-scene_corners[1].x;
+            center = cv::Point2f(scene_corners[0].x+(scene_corners[2].x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-scene_corners[2].y)/2);
+            second_point = cv::Point2f(scene_corners[0].x+(center.x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-center.y)/2);
+            res = Draw_rectangle(res,obj_corners,colors[j]);
+            corners[objectC] = center;
+            objectC++;
+            corners[objectC] = second_point;
+            objectC++;
+            cv::imshow("result", res);
+            cv::waitKey(0);
        }
         cv::destroyWindow("result");
 
         cv:: Mat gray,prevGray;
         cv::Size subPixWinSize(10,10), winSize(31,31);
-        cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
         for(;;) {
+            cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
             cap >> frame;
             if (frame.empty())
                 break;
 
             frame.copyTo(image);
             cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-
             std::vector<uchar> status;
             std::vector<float> err;
             if(prevGray.empty())
                 gray.copyTo(prevGray);
             calcOpticalFlowPyrLK(prevGray, gray, corners, corners_next, status, err, winSize,
-                                     3, termcrit, 0, 0.001);
-            
+                                     20, termcrit, 0, 0.001);
 
+            image = Draw_rectangle_by_center(corners,image,colors,height,width);
             cv::imshow("LK Demo", image);
             cv::waitKey(1);
             std::swap(corners, corners_next);
             cv::swap(prevGray, gray);
-
         }
 
     }
