@@ -210,7 +210,7 @@ int main() {
             image = Draw_rectangle_by_center(corners,image,colors,height,width);
             for(int i=0; i<corners_next.size();i++)
             {
-                cv::circle(image, corners_next[i] ,3, cv::Scalar(0,255,0), -1, 8);
+                cv::circle(image, corners_next[i] ,5, cv::Scalar(0,255,0), -1, 8);
             }
             cv::imshow("LK Demo", image);
             cv::waitKey(1);
