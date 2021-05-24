@@ -58,7 +58,6 @@ inline cv::Mat findKeyPointsHomography(std::vector<cv::KeyPoint>& kpts1, std::ve
     cv::Mat H = findHomography(pts1, pts2, cv::RANSAC, 4, match_mask);
     return H;
 }
-
 cv::Mat Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scalar color)
 {
 
@@ -71,7 +70,41 @@ cv::Mat Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scal
 
 }
 
-cv::Mat Draw_rectangle_by_two_points(std::vector<cv::Point2f> corners, cv::Mat image, std::vector<cv::Scalar> colors,
+
+std::vector<cv::Point2f> FindCorners(cv::Mat &image, cv::Mat H, cv::Mat res, cv::Scalar colors) {
+
+    std::vector<cv::Point2f> obj_corners(4);
+    obj_corners[0] = cv::Point2f(0, 0);
+    obj_corners[1] = cv::Point2f((float) image.cols, 0);
+    obj_corners[2] = cv::Point2f((float) image.cols, (float) image.rows);
+    obj_corners[3] = cv::Point2f(0, (float) image.rows);
+
+    std::vector<cv::Point2f> scene_corners(4);
+    perspectiveTransform(obj_corners, scene_corners, H);
+    obj_corners[0]=scene_corners[0] + cv::Point2f((float) image.cols, 0);
+    obj_corners[1]=scene_corners[1] + cv::Point2f((float) image.cols, 0);
+    obj_corners[2]=scene_corners[2] + cv::Point2f((float) image.cols, 0);
+    obj_corners[3]=scene_corners[3] + cv::Point2f((float) image.cols, 0);
+    res = Draw_rectangle(res,obj_corners,colors);
+    cv::imshow("result", res);
+
+    cv::waitKey(0);
+    return scene_corners;
+}
+
+
+std::vector<cv::Point2f> FindPointsForTrack(std::vector<cv::Point2f> scene_corners) {
+    cv::Point2f center, second_point;
+    std::vector<cv::Point2f> points(2);
+    center = cv::Point2f(scene_corners[0].x+(scene_corners[2].x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-scene_corners[2].y)/2);
+    points[0] = center;
+    second_point = cv::Point2f(scene_corners[0].x+(center.x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-center.y)/2);
+    points[1] = second_point;
+    return points;
+
+}
+
+cv::Mat Draw_rectangle_by_center(std::vector<cv::Point2f> corners, cv::Mat image, std::vector<cv::Scalar> colors,
                                  std::vector<float> height, std::vector<float> width)
 {
     std::vector<cv::Point2f> obj_corners(4);
@@ -95,6 +128,7 @@ cv::Mat Draw_rectangle_by_two_points(std::vector<cv::Point2f> corners, cv::Mat i
     return image;
 }
 
+
 int main() {
     cv::VideoCapture cap("../video.mov");
     std::vector<cv::Mat> images;
@@ -103,7 +137,6 @@ int main() {
     std::vector<cv::String> filenames;
     cv::utils::fs::glob(cv::String("../objects"),cv::String("*.png"),filenames);
     std::vector<cv::Point2f> obj_corners(4), obj_corners_next(4);
-    std::vector<cv::Point2f>point1(4),point2(4);
     std::vector<cv::Scalar> colors;
     std::vector<float> height(4), width(4);
     colors = DefColors();
@@ -120,10 +153,10 @@ int main() {
         {
             std::vector<cv::KeyPoint> kpts1;
             std::vector<cv::KeyPoint> kpts2;
+            std::vector<cv::Point2f> scene_corners;
 
             cv::Mat desc1;
             cv::Mat desc2;
-
             std::vector<cv::DMatch> matches;
 
             detect_and_compute(images[j], kpts1, desc1);
@@ -138,31 +171,16 @@ int main() {
             cv::drawMatches(images[j], kpts1, frame, kpts2, matches, res, cv::Scalar::all(-1),
                             cv::Scalar::all(-1), match_mask, cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
-            std::vector<cv::Point2f> obj_corners(4);
-            obj_corners[0] = cv::Point2f(0, 0);
-            obj_corners[1] = cv::Point2f((float) images[j].cols, 0);
-            obj_corners[2] = cv::Point2f((float) images[j].cols, (float) images[j].rows);
-            obj_corners[3] = cv::Point2f(0, (float) images[j].rows);
-
-            std::vector<cv::Point2f> scene_corners(4);
-            perspectiveTransform(obj_corners, scene_corners, H);
-            obj_corners[0]=scene_corners[0] + cv::Point2f((float) images[j].cols, 0);
-            obj_corners[1]=scene_corners[1] + cv::Point2f((float) images[j].cols, 0);
-            obj_corners[2]=scene_corners[2] + cv::Point2f((float) images[j].cols, 0);
-            obj_corners[3]=scene_corners[3] + cv::Point2f((float) images[j].cols, 0);
-            res = Draw_rectangle(res,obj_corners,colors[j]);
-            cv::Point2f center, second_point;
+            scene_corners = FindCorners(images[j],H, res, colors[j]);
+            std::vector<cv::Point2f> points;
             height[j] = scene_corners[0].y-scene_corners[1].y;
             width[j] = scene_corners[2].x-scene_corners[1].x;
-            center = cv::Point2f(scene_corners[0].x+(scene_corners[2].x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-scene_corners[2].y)/2);
-            second_point = cv::Point2f(scene_corners[0].x+(center.x-scene_corners[0].x)/2,scene_corners[0].y-(scene_corners[0].y-center.y)/2);
-            res = Draw_rectangle(res,obj_corners,colors[j]);
-            corners[objectC] = center;
+            points = FindPointsForTrack(scene_corners);
+
+            corners[objectC] = points[0];
             objectC++;
-            corners[objectC] = second_point;
+            corners[objectC] = points[1];
             objectC++;
-            cv::imshow("result", res);
-            cv::waitKey(0);
         }
         cv::destroyWindow("result");
 
@@ -183,7 +201,7 @@ int main() {
             calcOpticalFlowPyrLK(prevGray, gray, corners, corners_next, status, err, winSize,
                                  20, termcrit, 0, 0.001);
 
-            image = Draw_rectangle_by_two_points(corners,image,colors,height,width);
+            image = Draw_rectangle_by_center(corners,image,colors,height,width);
             for(int i=0; i<corners_next.size();i++)
             {
                 cv::circle(image, corners_next[i] ,3, cv::Scalar(0,255,0), -1, 8);
