@@ -73,7 +73,9 @@ cv::Mat Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scal
 
 std::vector<cv::Point2f> FindCorners(cv::Mat &image, cv::Mat H, cv::Mat res, cv::Scalar colors) {
 
-    std::vector<cv::Point2f> obj_corners(4);
+    std::vector<cv::Scalar> colors_corners;
+    colors_corners = DefColors();
+    std::vector<cv::Point2f> obj_corners(4),obj_corners1(4) ;
     obj_corners[0] = cv::Point2f(0, 0);
     obj_corners[1] = cv::Point2f((float) image.cols, 0);
     obj_corners[2] = cv::Point2f((float) image.cols, (float) image.rows);
@@ -81,13 +83,17 @@ std::vector<cv::Point2f> FindCorners(cv::Mat &image, cv::Mat H, cv::Mat res, cv:
 
     std::vector<cv::Point2f> scene_corners(4);
     perspectiveTransform(obj_corners, scene_corners, H);
-    obj_corners[0]=scene_corners[0] + cv::Point2f((float) image.cols, 0);
-    obj_corners[1]=scene_corners[1] + cv::Point2f((float) image.cols, 0);
-    obj_corners[2]=scene_corners[2] + cv::Point2f((float) image.cols, 0);
-    obj_corners[3]=scene_corners[3] + cv::Point2f((float) image.cols, 0);
-    res = Draw_rectangle(res,obj_corners,colors);
+    obj_corners1[0]=scene_corners[0] + cv::Point2f((float) image.cols, 0);
+    obj_corners1[1]=scene_corners[1] + cv::Point2f((float) image.cols, 0);
+    obj_corners1[2]=scene_corners[2] + cv::Point2f((float) image.cols, 0);
+    obj_corners1[3]=scene_corners[3] + cv::Point2f((float) image.cols, 0);
+    res = Draw_rectangle(res,obj_corners1,colors);
+    for(int i=0; i<4;i++)
+    {
+        line(res, obj_corners[i],obj_corners1[i], colors_corners[i], 4);
+    }
+    cv::namedWindow("result", cv::WINDOW_OPENGL);
     cv::imshow("result", res);
-
     cv::waitKey(0);
     return scene_corners;
 }
