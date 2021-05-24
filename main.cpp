@@ -71,7 +71,7 @@ cv::Mat Draw_rectangle(cv::Mat res,std::vector<cv::Point2f>obj_corners, cv::Scal
 
 }
 
-cv::Mat Draw_rectangle_by_center(std::vector<cv::Point2f> corners, cv::Mat image, std::vector<cv::Scalar> colors,
+cv::Mat Draw_rectangle_by_two_points(std::vector<cv::Point2f> corners, cv::Mat image, std::vector<cv::Scalar> colors,
                                  std::vector<float> height, std::vector<float> width)
 {
     std::vector<cv::Point2f> obj_corners(4);
@@ -183,7 +183,7 @@ int main() {
             calcOpticalFlowPyrLK(prevGray, gray, corners, corners_next, status, err, winSize,
                                  20, termcrit, 0, 0.001);
 
-            image = Draw_rectangle_by_center(corners,image,colors,height,width);
+            image = Draw_rectangle_by_two_points(corners,image,colors,height,width);
             for(int i=0; i<corners_next.size();i++)
             {
                 cv::circle(image, corners_next[i] ,3, cv::Scalar(0,255,0), -1, 8);
