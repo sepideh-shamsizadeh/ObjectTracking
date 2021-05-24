@@ -163,7 +163,7 @@ int main() {
             objectC++;
             cv::imshow("result", res);
             cv::waitKey(0);
-       }
+        }
         cv::destroyWindow("result");
 
         cv:: Mat gray,prevGray;
@@ -181,9 +181,13 @@ int main() {
             if(prevGray.empty())
                 gray.copyTo(prevGray);
             calcOpticalFlowPyrLK(prevGray, gray, corners, corners_next, status, err, winSize,
-                                     20, termcrit, 0, 0.001);
+                                 20, termcrit, 0, 0.001);
 
             image = Draw_rectangle_by_center(corners,image,colors,height,width);
+            for(int i=0; i<corners_next.size();i++)
+            {
+                cv::circle(image, corners_next[i] ,3, cv::Scalar(0,255,0), -1, 8);
+            }
             cv::imshow("LK Demo", image);
             cv::waitKey(1);
             std::swap(corners, corners_next);
@@ -193,5 +197,3 @@ int main() {
     }
     return 0;
 }
-
-
